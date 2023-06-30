@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/common/ERC2981.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract Amp is ERC1155, ERC2981, Ownable {
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+    Counters.Counter private _itemsSold;
+
+    //EVENTS//
+    event CourseItemCreated (
+      uint256 indexed id,
+      address creator,
+      //address owner,
+      uint256 price,
+      uint _amount
+    );
+
+    struct Course {
+        uint id;
+        address payable creator;
+        //address payable AMP;
+        uint price;
+        uint amount;  
+        string name;
+        string company; 
+    }
+
+    
+    //change to private before going live
+    mapping(uint256 => Course) public idToCourses;
+    mapping(address => bool) public admin;
+    mapping(address => bool) public students;
+   
+    uint public nextCourseId;
+    uint public nextAdminId;
+    uint public nextStudentId;
+    
+    //If we decide to add a listing price
+    //uint256 listingPrice = 0.025 ether;
+    
+    constructor() ERC1155("ipfs://example/{id}.json") {
+        // set royalty of all NFTs to 5%
+
+        _setDefaultRoyalty(_msgSender(), 500);
+    }
+
+    /* Updates the listing price of the contract Has no Function at the moment*/
+    function updateListingPrice(uint _listingPrice) public payable onlyOwner {
+      listingPrice = _listingPrice;
+    }
+
+     /* Returns the listing price of the contract. Has No function at the moment*/
+    function getListingPrice() public view returns (uint256) {
+      return listingPrice;
+    }
+
+    //OWNER ONLY//
+    function approveAdmin(address _admin) public onlyOwner {
+      //Contract owner approves new admin addresses - Complete
+      //require check that the address being added doesnt already exist - Complete
+      require(admin[_admin] != true, "Already Admin");
+      admin[_admin] = true;  
+      nextAdminId++;
+    } 
+
+    //ADMINS ONLY//
+    /* Mints tokens and lists it in the marketplace */
+    function createCourse(uint256 _id, uint256 _amount, uint256 _price, string memory _name, string memory _company, bytes memory _data) virtual public payable onlyAdmin() returns (uint) {
+     
+      _setDefaultRoyalty(_msgSender(), 500);
+      _tokenIds.increment();
+      uint256 newTokenId = _tokenIds.current();
+
+      _mint(msg.sender, _id, _amount, _data);
+      
+      createCourseItem(_id, _price, _amount, _name, _company, _data);
+      return newTokenId;
+    }
+
+    function createCourseItem(
+      uint256 _id,
+      uint _amount,
+      uint256 _price,
+      string memory _name,
+      string memory _company,
+      bytes memory _data
+    ) private onlyAdmin() {
+      require(_price > 0, "Price must be at least 1 wei");
+      //require(msg.value == listingPrice, "Price must be equal to listing price");
+
+      idToCourses[_id] =  Course(
+        _id,
+        payable(msg.sender),
+       // payable(address(this)),
+        _price,
+        _amount,
+        _name,
+        _company
+        
+      );
+
+      _safeTransferFrom(msg.sender, address(this), _id, _amount, _data);
+      emit CourseItemCreated(
+        _id,
+        msg.sender,
+      //address(this),
+        _price,
+        _amount 
+      );
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155, ERC2981) returns (bool) {
+        return super.supportsInterface(interfaceId);
+    }
+
+    //MODIFIERS//
+    //OnlyAdmins can use functions that utilize this modifier
+    modifier onlyAdmin() {
+      require(admin[_msgSender()] == true ,"Only Admin");
+      _;
+    }
+}

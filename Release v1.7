@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract Amp is ERC1155, Ownable {
+ 
+    //verify the users address and check the account status
+    enum studentStatus{notRegistered, registered}
+    enum adminStatus{notRegistered, pendingApproval, approved}
+    
+    
+    event AdminApproved(address indexed admin, bool approved);
+    event AdminRegistered(address indexed admin, string name);
+    event StudentRegistered(address indexed student, string name);
+    event TokensTransferred(address indexed who, address indexed to, uint id, uint amount);
+
+    struct Students {
+        //Enter their username. Associates name with Wallet address
+        //How many courses has student signed up for. How many Amp NFT are owned
+        //What their student ID. When did they sign up
+        //Might not need this boolean. Originally thought it would be used to verify if student has 
+        //signed up for a course
+        //Not registered or registered. Changes after Student signs up.
+        string name;
+        uint numCourses;
+        uint studentIndex;
+        bool signedUp;
+        studentStatus _state;
+    }
+
+    struct Admin{
+        string name;
+        bool approval;
+        adminStatus _state;
+    }
+    mapping(address => Students) public student;
+    mapping(address => Admin) public admin;
+
+    uint256 public numberOfStudents;
+    uint256 public tokensInCirculation;
+
+    uint256 public constant Javascript = 0;
+    uint256 public constant ProjectManagement = 1;
+    
+    constructor() ERC1155(",") {
+        _mint(msg.sender, Javascript, 10,"");
+        _mint(msg.sender, ProjectManagement, 10,"");
+        tokensInCirculation = 0;
+    }
+
+    function mint(uint256 id,uint256 amount,bytes memory data) internal virtual {
+      for(uint256 i =0; i< amount; i++)
+      _mint(msg.sender, tokensInCirculation, 1, "");
+      tokensInCirculation++; 
+      
+
+
+
+
+    }
+
+
+    //needs to reflect the tokens "Javascript, ProjectManagement" when new tokens are minted
+    /*function mint(uint256 amount, uint256 _id) public onlyOwner {
+        for(uint256 i =0; i< amount; i++)
+        _mint(msg.sender, tokensInCirculation, 1, "");
+        tokensInCirculation++;
+    }
+    */
+
+    function approveAdmin(address _admin, bool _approval) public onlyOwner {
+        require(owner() == _msgSender() && admin[_admin]._state == adminStatus.pendingApproval, "Address has not requested approval");
+        admin[_admin].approval = _approval;
+        admin[_admin]._state = adminStatus.approved;
+        
+        emit AdminApproved (_admin, _approval);
+    }
+
+    function registerAdmin(address _admin, string memory _name) public {
+         require(owner() != _msgSender(), "Owner cannot register");
+         require(student[msg.sender].signedUp == false, "You are already a student");
+
+         admin[_admin].name = _name;
+         admin[_admin]._state = adminStatus.pendingApproval;
+
+         /*testing
+         admin[_admin].name = _name;
+         admin[_admin]._state = adminStatus.pendingApproval;
+         */
+
+        //Alert once Admin has registered and is requesting approval
+        emit AdminRegistered(_admin, _name);
+    }
+
+    function registerStudent(address _student, string memory _name) public {
+        require(owner() != _msgSender(), "Owner cannot register");
+        require(admin[msg.sender].approval == false, "You are an admin");
+        student[msg.sender].name = _name;
+        student[msg.sender]._state = studentStatus.registered;
+        student[msg.sender].signedUp = true;
+        numberOfStudents++;
+
+        emit StudentRegistered(_student, _name);
+    }
+
+    //transfer tokens onlyOwner or Approved Admin
+    function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes memory data) public virtual override {
+        //Require the sender to either be the contract owner OR have been approved to send Amp
+        //Students are unale to send. Will not have the option to be approved.
+        //need to change msg.sender for testing purposes. 
+        require(owner() == _msgSender() || admin[msg.sender]._state == adminStatus.approved, "You are not approved to send Amp");
+        require(student[to]._state == studentStatus.registered || admin[to]._state == adminStatus.approved, "Can't send to unregistered address");
+        
+        _safeTransferFrom(from, to, id, amount, data);
+
+        emit TokensTransferred(from, to, id, amount);
+
+
+    }
+}

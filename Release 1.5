@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.2;
+
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract Amp is ERC1155, Ownable {
+ 
+    //verify the users address and check the account status
+    enum studentStatus{notRegistered, registered}
+    enum adminStatus{pendingApproval, approved}
+
+    struct Students {
+        //Enter their username. Associates name with Wallet address
+        string name;
+        //How many courses has student signed up for. How many Amp NFT are owned
+        uint numCourses;
+        //What their student ID. When did they sign up
+        uint studentIndex;
+        //Might not need this boolean. Originally thought it would be used to verify if student has 
+        //signed up for a course
+        bool signedUp;
+        //Not registered or registered. Changes after Student signs up.
+        studentStatus _state;
+    }
+
+    struct Admin{
+        string name;
+        bool approval;
+        adminStatus _state;
+    }
+    mapping(address => Students) public student;
+    mapping(address => Admin) public admin;
+
+    uint256 public numberOfStudents;
+    uint256 public tokensInCirculation;
+    
+    constructor() ERC1155("") {
+        tokensInCirculation = 0;
+    }
+
+    function mint(uint256 amount) public onlyOwner {
+        for(uint256 i =0; i< amount; i++)
+        _mint(msg.sender, tokensInCirculation, 1, "");
+        tokensInCirculation++;
+    }
+
+    
+    function registerAdmin(string memory _name) public {
+        //After signing up. Go into pending state until Owner approves the admin
+        //Have not written this in yet
+        admin[msg.sender].name = _name;
+        admin[msg.sender]._state = adminStatus.pendingApproval;
+
+    }
+
+    function registerStudent(string memory _name) public {
+        //Keeps track of registered students and status
+        student[msg.sender].name = _name;
+        student[msg.sender]._state = studentStatus.registered;
+        student[msg.sender].signedUp = true;
+        numberOfStudents++;
+    }
+
+    
+       function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes memory data) public virtual override {
+        //transfer tokens onlyOwner or Approved Admin
+        //Require the sender to either be the contract owner OR have been approved to send Amp
+        //Students are unale to send. Will not have the option to be approved.
+        
+        require(owner() == _msgSender() || admin[msg.sender].approval == true, "You are not approved to send Amp");
+        _safeTransferFrom(from, to, id, amount, data);
+    }
+}
+    
